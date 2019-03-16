@@ -32,3 +32,5 @@ void assign_a_var(struct var_table_t table,const char* name, int value);
 int hash_func(struct var_table_t table,const char* name);
 int is_undef(struct var_t var);
 void print_vars(FILE* out, struct var_table_t table);
+void throw_the_undef_var_exception(const char* name);
+void print_var(FILE* out, struct var_t var);

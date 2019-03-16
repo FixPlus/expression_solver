@@ -44,6 +44,16 @@ struct lex_array_t lex_string(const char **str) {   //after reaching SEMICOLON i
 			larr.lexems[larr.size].lex.b = RBRAC;	
 			break;			
 		}
+		case '{':{
+			larr.lexems[larr.size].kind = BRACE;
+			larr.lexems[larr.size].lex.b = LCURV;
+			break;
+		}
+		case '}':{
+			larr.lexems[larr.size].kind = BRACE;
+			larr.lexems[larr.size].lex.b = RCURV;	
+			break;			
+		}
 		case '+':{
 			larr.lexems[larr.size].kind = OP;
 			larr.lexems[larr.size].lex.op = ADD;	
@@ -68,15 +78,88 @@ struct lex_array_t lex_string(const char **str) {   //after reaching SEMICOLON i
 			larr.size--;
 			break;
 		}
+		case '\t':{
+			larr.size--;
+			break;
+		}
 		case '=':{
+			if(*(*str+i + 1) == '='){
+				printf("%c", '=');
+				larr.lexems[larr.size].kind = OP;
+				larr.lexems[larr.size].lex.op = EQUAL;
+				i++;
+				break;
+			}
 			larr.lexems[larr.size].kind = ASSIGN;
+			break;
+		}
+		case '>':{
+			larr.lexems[larr.size].kind = OP;
+			if(*(*str + i + 1) == '='){
+				printf("%c", '=');
+				larr.lexems[larr.size].lex.op = EQ_OR_MORE;
+				i++;
+			}
+			else
+				larr.lexems[larr.size].lex.op = MORE;
+			break;
+		}
+		case '<':{
+			larr.lexems[larr.size].kind = OP;
+			if(*(*str + i + 1) == '='){
+				printf("%c", '=');
+				larr.lexems[larr.size].lex.op = EQ_OR_LESS;
+				i++;
+			}
+			else
+				larr.lexems[larr.size].lex.op = LESS;
+			break;
+		}
+		case '&':{
+			if(*(*str + i + 1) != '&'){
+				printf("\nError with '&&' sign\n");
+				free_lexarray(larr);
+				larr.lexems = NULL;
+				larr.size = 0;
+				return larr;
+			}
+			i++;
+			printf("%c", '&');
+			larr.lexems[larr.size].kind = OP;
+			larr.lexems[larr.size].lex.op = LG_AND; 
+			break;
+		}
+		case '|':{
+			if(*(*str + i + 1) != '|'){
+				printf("\nError with '||' sign\n");
+				free_lexarray(larr);
+				larr.lexems = NULL;
+				larr.size = 0;
+				return larr;
+			}
+			i++;
+			printf("%c", '|');
+			larr.lexems[larr.size].kind = OP;
+			larr.lexems[larr.size].lex.op = LG_OR;
+			break;
+		}
+		case '!':{
+			if(*(*str + i + 1) != '='){
+				printf("\nError with '!=' sign\n");
+				free_lexarray(larr);
+				larr.lexems = NULL;
+				larr.size = 0;
+				return larr;
+			}
+			i++;
+			printf("%c", '=');
+			larr.lexems[larr.size].kind = OP;
+			larr.lexems[larr.size].lex.op = NOT_EQUAL;
 			break;
 		}
 		case ';':{
 			larr.lexems[larr.size].kind = SEMICOLON;
-			larr.size++;
-			*str += i + 1;
-			return larr;
+			break;
 		}
 		case '\n':{
 			larr.size--;
@@ -120,6 +203,37 @@ struct lex_array_t lex_string(const char **str) {   //after reaching SEMICOLON i
 						larr.lexems[larr.size].lex.name = (char*)realloc(larr.lexems[larr.size].lex.name ,cap);
 					}
 				}
+				larr.lexems[larr.size].kind = KEYWORD;
+				switch(is_key_word(larr.lexems[larr.size].lex.name)){
+					case 1:{
+						larr.lexems[larr.size].lex.word = WHILE;
+						break;
+					}
+					case 2:{
+						larr.lexems[larr.size].lex.word = IF;
+						break;
+					}
+					case 3:{
+						larr.lexems[larr.size].lex.word = PRINT;
+						break;
+					}
+					case 4:{
+						larr.lexems[larr.size].lex.word = ELSE;
+						break;
+					}
+					case 5:{
+						larr.lexems[larr.size].lex.word = ALL;
+						break;
+					}
+					case 6:{
+						larr.lexems[larr.size].lex.word = OUT;
+						break;
+					}
+					default:{
+						larr.lexems[larr.size].kind = VAR;
+						break;
+					}
+				}
 				i--;
 			}
 		}
@@ -129,6 +243,7 @@ struct lex_array_t lex_string(const char **str) {   //after reaching SEMICOLON i
 
 	  
   }
+  
   
   larr.size++;
   larr.capacity++;
@@ -141,6 +256,21 @@ struct lex_array_t lex_string(const char **str) {   //after reaching SEMICOLON i
   return larr;
 }
 
+int is_key_word(const char* word){
+	if(!strcmp("while", word))
+		return 1;
+	if(!strcmp("if", word))
+		return 2;
+	if(!strcmp("print", word))
+		return 3;
+	if(!strcmp("else", word))
+		return 4;
+	if(!strcmp("all", word))
+		return 5;
+	if(!strcmp("out", word))
+		return 6;
+	return 0;
+}
 int is_std_op_char(char c){
 	switch(c){
 		case '\n': break;
@@ -149,8 +279,11 @@ int is_std_op_char(char c){
 		case '*': break;
 		case '+': break;
 		case '-': break;
+		case '=': break;
 		case ')': break;
 		case '(': break;
+		case '{': break;
+		case '}': break;
 		case ';': break;
 		default: return 0;
 	}
@@ -160,10 +293,18 @@ int is_std_op_char(char c){
 static void
 print_op(enum operation_t opcode) {
   switch(opcode) {
-    case ADD: printf(" PLUS"); break;
-    case SUB: printf(" MINUS"); break;
-    case MUL: printf(" MUL"); break;
-    case DIV: printf(" DIV"); break;
+    case ADD: printf("+"); break;
+    case SUB: printf("-"); break;
+    case MUL: printf("*"); break;
+    case DIV: printf("/"); break;
+    case EQUAL: printf("=="); break;
+    case NOT_EQUAL: printf("!="); break;
+	case EQ_OR_MORE: printf(">="); break;
+	case EQ_OR_LESS: printf("<="); break;
+	case MORE: printf(">"); break;
+	case LESS: printf("<"); break;
+	case LG_AND: printf("&&"); break;
+	case LG_OR: printf("||"); break;
     default: assert(0 && "unknown opcode");
   }
 }
@@ -171,30 +312,43 @@ print_op(enum operation_t opcode) {
 static void
 print_brace(enum braces_t bracetype) {
   switch(bracetype) {
-    case LBRAC: printf(" LBRAC"); break;
-    case RBRAC: printf(" RBRAC"); break;
+    case LBRAC: printf("("); break;
+    case RBRAC: printf(")"); break;
+    case LCURV: printf("{"); break;
+    case RCURV: printf("}"); break;
     default: assert(0 && "unknown bracket");
   }
 }
 
 static void
 print_num(int n) {
-  printf(" NUMBER:%d", n);
+  printf(" %d", n);
 }
 
 static void
 print_semicolon() {
-  printf(" SEMICOLON");
+  printf(";");
 }
 
 static void
 print_assign() {
-  printf(" ASSIGN");
+  printf("=");
 }
 
 static void
 print_variable(char* name) {
-  printf(" VAR:%s", name);
+  printf("%s", name);
+}
+
+
+static void
+print_keyword(enum keyword_t word) {
+  switch(word) {
+    case WHILE: printf("while"); break;
+    case IF: printf("if"); break;
+	case PRINT: printf("print"); break;
+	case ELSE: printf("else"); break;
+}
 }
 
 void
@@ -203,10 +357,11 @@ print_lexem(struct lexem_t lxm) {
     case OP: print_op(lxm.lex.op); break;
     case BRACE: print_brace(lxm.lex.b); break;
     case NUM: print_num(lxm.lex.num); break;
-	case END: printf(" END");break;
+	case END: printf(" **END**");break;
 	case SEMICOLON: print_semicolon(); break;
 	case VAR: print_variable(lxm.lex.name); break;
 	case ASSIGN: print_assign(); break;
+	case KEYWORD: print_keyword(lxm.lex.word); break;
     default: assert(0 && "unknown lexem");
   }
 }
@@ -216,6 +371,8 @@ void dump_lexarray(struct lex_array_t pl) {
   assert(pl.lexems != NULL);
   for (i = 0; i < pl.size; ++i)
     print_lexem(pl.lexems[i]);
+
+	printf("\n");
 }
 
 void free_lexarray(struct lex_array_t lexarr){

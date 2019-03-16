@@ -7,13 +7,15 @@
 #include <ctype.h>
 
 // lexem is operation | brace | number
-enum lexem_kind_t { OP, BRACE, NUM, VAR, ASSIGN, SEMICOLON, END };
+enum lexem_kind_t { OP, BRACE, NUM, VAR, ASSIGN, SEMICOLON, KEYWORD, END };
 
 // operation is: +, -, *, /
-enum operation_t { ADD, SUB, MUL, DIV };
+enum operation_t { ADD, SUB, MUL, DIV, EQUAL, NOT_EQUAL, MORE, LESS, EQ_OR_MORE, EQ_OR_LESS, LG_AND, LG_OR};
 
 // braces are: (, )
-enum braces_t { LBRAC, RBRAC };
+enum braces_t { LBRAC, RBRAC, LCURV, RCURV };
+
+enum keyword_t {WHILE, IF, PRINT, ELSE, ALL, OUT};
 
 // lexem is one of lexem kind entities
 // if (l.kind == BRACE) 
@@ -23,6 +25,7 @@ struct lexem_t {
   union {
     enum operation_t op;
     enum braces_t b;
+	enum keyword_t word;
     int num;
 	char* name;
   } lex;
@@ -48,4 +51,5 @@ void dump_lexarray(struct lex_array_t pl);
 
 void free_lexarray(struct lex_array_t lexarr);
 int is_std_op_char(char c);
+int is_key_word(const char* word);
 

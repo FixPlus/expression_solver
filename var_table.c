@@ -5,6 +5,10 @@ struct var_table_t create_var_table(int size){
 	return ret;
 }
 
+void throw_the_undef_var_exception(const char* name){
+	printf("Variable %s is undefined!\n", name);
+}
+
 void destroy_var_table(struct var_table_t* table){
 	for(int i = 0; i < table->size; i++){
 		struct var_node_t* temp = table->hash[i];
@@ -90,11 +94,14 @@ int is_undef(struct var_t var){
 	return var.name == NULL ? 1 : 0;
 }
 
+void print_var(FILE* out, struct var_t var){
+	fprintf(out,"%s = %d; ", var.name, var.value);
+}
 void print_vars(FILE* out, struct var_table_t table){
 	for(int i = 0; i < table.size; i++){
 		struct var_node_t* temp = table.hash[i];
 		while(temp){
-			fprintf(out,"%s = %d; ",temp->var.name, temp->var.value);
+			print_var(out, temp->var);
 			temp = temp->next;
 		}
 	}
