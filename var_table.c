@@ -6,10 +6,13 @@ struct var_table_t create_var_table(int size){
 }
 
 void throw_the_undef_var_exception(const char* name){
-	printf("Variable %s is undefined!\n", name);
+	printf("Variable '%s' is undefined!\n", name);
 }
 
 void destroy_var_table(struct var_table_t* table){
+	if(!table)
+		return;
+	
 	for(int i = 0; i < table->size; i++){
 		struct var_node_t* temp = table->hash[i];
 		table->hash[i] = NULL;

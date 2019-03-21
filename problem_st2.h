@@ -4,7 +4,7 @@
 #include "var_table.h"
 
 enum {TABLE_SIZE = 100};
-enum node_kind_t { NODE_OP, NODE_VAL};
+enum node_kind_t { NODE_OP, NODE_VAL, NODE_KEYWORD, NODE_ASSIGN, NODE_VAR, NODE_NONE};
 enum calc_stat_t {CALC_SUCCES, CALC_FAILED};
 enum parse_stat {PARSE_SUCCES, PARSE_FAILED};
 
@@ -17,6 +17,8 @@ struct node_data_t {
   enum node_kind_t k;
   union {
     enum operation_t op;
+	enum keyword_t word;
+	char* name;
     int d;
   } u;
 };
@@ -29,15 +31,15 @@ struct node_t {
 
 
 
-struct node_t *build_syntax_tree(struct lexem_t** lex, struct var_table_t table);
+struct node_t *build_syntax_tree(struct lexem_t** lex);
 
 
 
-struct node_t* parse_logic(struct lexem_t** lex, struct var_table_t table);
-struct node_t* parse_comparation(struct lexem_t** lex, struct var_table_t table);
-struct node_t* parse_expr(struct lexem_t** lex, struct var_table_t table);
-struct node_t* parse_mult(struct lexem_t** lex, struct var_table_t table);
-struct node_t* parse_term(struct lexem_t** lex, struct var_table_t table);
+struct node_t* parse_logic(struct lexem_t** lex);
+struct node_t* parse_comparation(struct lexem_t** lex);
+struct node_t* parse_expr(struct lexem_t** lex);
+struct node_t* parse_mult(struct lexem_t** lex);
+struct node_t* parse_term(struct lexem_t** lex);
 
 struct node_t* create_operation_expression(enum operation_t opcode);
 
@@ -55,7 +57,6 @@ int is_semicolon(struct lexem_t lex);
 
 
 
-struct calc_data_t calculate(struct node_t *top);
-int calc_result(struct node_t *top);
+struct calc_data_t calculate(struct node_t *top, struct var_table_t table);
 
 void free_syntax_tree(struct node_t * top);

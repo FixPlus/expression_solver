@@ -2,28 +2,38 @@
 
 
 
-struct var_table_t solve_expressions(const char* exprs){
-	struct var_table_t ret = create_var_table(TABLE_SIZE);  //creating an array of variables
-	sp_out = stdout;
+struct node_t* parse_code(const char* exprs){	
 	struct lex_array_t lexarr = lex_string(&exprs);      //Reading expression (chars -> lexems)	
 	if(!lexarr.lexems){
-		return ret;
+		return NULL;
 	}
+	printf("\nParsing...\n");
+	
+	struct node_t* right, *left, *node;
 	struct lexem_t* current = lexarr.lexems;
+	left = parse_block(&current);
+	if(!left){
+		printf("Parse failed!\n");
+		return NULL;
+	}
+	
+	node = left;
+	
 	while(!is_end(*current)){   //doing this till END lexem 
-		if(parse_block(&current, ret) == PARSE_FAILED){
-			printf("Procces failed, abandonig further calculations\n");
-			return ret;
+		node = create_empty_node();
+		node->right = parse_block(&current);
+		if(!node->right){
+			free_syntax_tree(node);
+			printf("Parse failed!\n");
+			return NULL;
 		}
+		node->left = left;
+		left = node;
 	}
+	
 	free_lexarray(lexarr);
-	
-	if(sp_out != stdout){
-		fclose(sp_out);
-		sp_out = stdout;
-	}
-	
-	return ret;
+	printf("Parsed!\n");		
+	return node;
 }
 
 void skip_to_next_rcurv(struct lexem_t **lex){
@@ -60,41 +70,39 @@ void skip_to_next_rbrac(struct lexem_t **lex){
 
 //block ::= { statement; statement; ...} | statement
 
-enum parse_stat parse_block(struct lexem_t **lex, struct var_table_t table){
+struct node_t* parse_block(struct lexem_t **lex){
+	struct node_t* ret = create_empty_node();
 	if(is_lcurv_brace(**lex)){
 		*lex = *lex + 1;
 		while(!is_rcurv_brace(**lex)){
-			if((**lex).kind == END)
-				return PARSE_FAILED;
-			if(parse_statement(lex, table) == PARSE_FAILED)
-				return PARSE_FAILED;
+			if((**lex).kind == END){
+				free_syntax_tree(ret);
+				return NULL;
+			}
+			struct node_t* right = parse_statement(lex);
+			if(!right){
+				free_syntax_tree(ret);
+				return NULL;
+			}
+			struct node_t* new_node = create_empty_node();
+			new_node->left = ret;
+			new_node->right = right;
+			ret = new_node;
 		}
 		*lex = *lex + 1;
-		return PARSE_SUCCES;
+		return ret;
 	}
 	else
-		return parse_statement(lex, table);
+		return parse_statement(lex);
 	
-}
-
-struct calc_data_t parse_and_calc_expression(struct lexem_t **lex, struct var_table_t table){
-	struct calc_data_t ret = {CALC_FAILED, 0};
-	
-	if(is_end(**lex)) return ret;
-	struct node_t* root = build_syntax_tree(lex, table);    
-	if(!root) return ret;
-			
-	ret = calculate(root);	
-	return ret;
 }
 
 // condition ::= (expression)
 
-struct calc_data_t parse_condition(struct lexem_t **lex, struct var_table_t table){
-	struct calc_data_t ret = {CALC_FAILED, 0};
+struct node_t* parse_condition(struct lexem_t **lex){
 	if(!is_brace(**lex)){
 		printf("Expected '(', found: '"); print_lexem(**lex); printf("'\n");
-		return ret;
+		return NULL;
 	}
 	
 	
@@ -103,230 +111,303 @@ struct calc_data_t parse_condition(struct lexem_t **lex, struct var_table_t tabl
 	*lex = *lex - 1;
 	
 	if(!is_valid_expression(enter_point, *lex))
-		return ret;
+		return NULL;
 	
 	if(!is_brace(**lex)){
 		printf("Missing ')'\n");
-		return ret;
+		return NULL;
 	}
 	*lex = *lex - 1;
-	
-	return parse_and_calc_expression(lex, table);
+	return build_syntax_tree(lex);
 }
 
 // while :: = while condition [*true* block\statement]
 
-enum parse_stat parse_while(struct lexem_t **lex, struct var_table_t table){
-	struct lexem_t* enter_point = *lex;
-		
-	struct calc_data_t condition = parse_condition(lex, table);
-	if(condition.stat == CALC_FAILED)
-		return PARSE_FAILED;
+struct node_t* parse_while(struct lexem_t **lex){
+	/*
+		****WHILE NODE***
+		->left node contains condition expression
+		->right node contains block of statements
 	
-	while(condition.result){
-		*lex = *lex + 1;
-		enum parse_stat stat = parse_block(lex, table);
-		if(stat == PARSE_FAILED)
-			return PARSE_FAILED;
-		*lex = enter_point;
-		condition = parse_condition(lex, table);
-		
-		if(condition.stat == CALC_FAILED)
-			return PARSE_FAILED;
-	}
+	*/	
+	struct node_t* left = parse_condition(lex);
+	if(!left)
+		return NULL;
+	
 	*lex = *lex + 1;
-	skip_statement(lex);
-	return PARSE_SUCCES;
+	struct node_t* right = parse_block(lex);
+	if(!right){
+		free_syntax_tree(left);
+		return NULL;
+	}
+	
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_KEYWORD;
+	ret->data.u.word = WHILE;
+	ret->left = left;
+	ret->right = right;
+	
+	return ret;
 }
 
 
 // if :: = < if condition [*true* block\statement] > + < else [*false* block\statement] > (false block is optional)
 
-enum parse_stat parse_if(struct lexem_t **lex, struct var_table_t table){
-
-	struct calc_data_t condition = parse_condition(lex, table);
-	if(condition.stat == CALC_FAILED)
-		return PARSE_FAILED;
+struct node_t* parse_if(struct lexem_t **lex){
+	/*
+		*******IF NODE*****
+		->left node contains condition expression
+		->right one lead to the "true block" with the ->right node and to the "false block" with ->left
+	
+	*/
+	struct node_t* left = parse_condition(lex);
+	if(!left)
+		return NULL;
 
 	*lex = *lex + 1;
-
-	if(condition.result){
-		if(parse_block(lex, table) == PARSE_FAILED)
-			return PARSE_FAILED;
-		
-		if(is_else(**lex))
-			skip_statement(lex);
-		
-		
-		return PARSE_SUCCES;	
+	struct node_t* right = create_empty_node();
+	struct node_t* right_right = parse_block(lex);
+	struct node_t* right_left;
+	
+	if(is_else(**lex)){
+		*lex = *lex + 1;
+		right_left = parse_block(lex);
 	}
-	else{
-		skip_statement(lex);
-		if(is_else(**lex)){
-			*lex = *lex + 1;
-			if(parse_block(lex, table) == PARSE_FAILED)
-				return PARSE_FAILED;
-		}
-		return PARSE_SUCCES;
+	else
+		right_left = create_empty_node();
+	
+	right->left = right_left;
+	right->right = right_right;
+	if(!right_right || !right_left){
+		free_syntax_tree(left);
+		free_syntax_tree(right);
+		return NULL;
 	}
-
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_KEYWORD;
+	ret->data.u.word = IF;
+	ret->left = left;
+	ret->right = right;
+	return ret;
 }
 
 // print :: = print var/num/all;
 
-enum parse_stat parse_print(struct lexem_t **lex, struct var_table_t table){
+struct node_t* parse_print(struct lexem_t **lex){
+	/*
+		*****PRINT NODE*****
+		->left node contaions info to print
+		
+	*/
+	
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_KEYWORD;
+	ret->data.u.word = PRINT;
+	struct node_t* left = create_empty_node();
+	ret->left = left;
+	
 	switch((**lex).kind){
 		case VAR:{
-			struct var_t var = get_var(table, (**lex).lex.name);
-			if(is_undef(var)){
-				throw_the_undef_var_exception((**lex).lex.name);
-				return PARSE_FAILED;
-			}
-			print_var(sp_out, var);
+			free(left);
+			left = create_var_node(**lex);
+			ret->left = left;
 			break;
 		}
 		case NUM:{
-			printf("%d; ", (**lex).lex.num);
+			left->data.k = NODE_VAL;
+			left->data.u.d = (**lex).lex.num;
 			break;
 			
 		}
 		case KEYWORD:{
 			switch((**lex).lex.word){
 				case ALL:{
-					print_vars(sp_out, table);
+					left->data.k = NODE_KEYWORD;
+					left->data.u.word = ALL;
 					break;
 				}
 				default:{
 					printf("Unexpected keyword '"); print_lexem(**lex); printf("' after 'print'\n");
-					break;
+					free_syntax_tree(ret);
+					return NULL;
 				}
 			}
 			break;
 		}
 		default:{
 			printf("Expected variable or num after 'print'\n");
-			return PARSE_FAILED;
+			free_syntax_tree(ret);
+			return NULL;
 		}
 	}
 	*lex = *lex + 1;
 	if(!is_semicolon(**lex)){
-		printf("Missing ';' after 'out' expression\n");
-		return PARSE_FAILED;
+		printf("Missing ';' after 'print' expression\n");
+		free_syntax_tree(ret);
+		return NULL;
 	}
 	*lex = *lex + 1;
-	return PARSE_SUCCES;
+	return ret;
 }
 
 // out :: = out var; (var used just to contain name of the file)
 
-enum parse_stat parse_out(struct lexem_t **lex, struct var_table_t table){
-	switch((**lex).kind){
-		case VAR:{
-			sp_out = fopen((**lex).lex.name,"w");
-			if(!sp_out){
-				sp_out = stdout;
-				printf("Can't open file '"); printf("%s", (**lex).lex.name); printf("'\n");
-			}
-			break;
-		}
-		default:{
-			printf("Expected name of the file after 'out'\n");
-			return PARSE_FAILED;
-		}
+struct node_t* parse_out(struct lexem_t **lex){
+	/*
+		*****OUT NODE*****
+		->left node contains name of the file
+	
+	*/
+	
+	
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_KEYWORD;
+	ret->data.u.word = OUT;
+	struct node_t* left = create_var_node(**lex);
+	if(!left){
+		printf("FUCK\n");
+		free(ret);
+		return NULL;
 	}
+	ret->left = left;
+	
 	*lex = *lex + 1;
 	if(!is_semicolon(**lex)){
 		printf("Missing ';' after 'out' expression\n");
-		return PARSE_FAILED;
+		free_syntax_tree(ret);
+		return NULL;
 	}
 	*lex = *lex + 1;
-	return PARSE_SUCCES;
+	return ret;
 }
 
 //assignation :: = VAR = expression;
 
-enum parse_stat parse_assignation(struct lexem_t **lex, struct var_table_t table){
-	char* name = (**lex).lex.name;
+struct node_t* parse_assignation(struct lexem_t **lex){
+	/*
+		****ASSIGNATION NODE*****
+		->left node contains name of the variable;
+		->right node contains the expression that will be assigned to this variable
 	
+	*/
+	
+	
+	struct node_t* left = create_var_node(**lex);
 	*lex = *lex + 1;
 	
 	if(!is_assign(**lex)){
-		printf("Expected '=' after '%s', found: '", name);
+		printf("Expected '=' after '%s', found: '", left->data.u.name);
 		print_lexem(**lex);
 		printf("'\n");
-		return PARSE_FAILED;
+		free_syntax_tree(left);
+		return NULL;
 	}
 	
 	struct lexem_t* enter_point = *lex + 1;
 	go_to_semicolon(lex);
-	if(!is_valid_expression(enter_point, *lex))
-		return PARSE_FAILED;
+	if(!is_valid_expression(enter_point, *lex)){
+		free_syntax_tree(left);
+		return NULL;
+	}
 	
 	*lex = *lex - 1;
-	struct calc_data_t result = parse_and_calc_expression(lex, table);
-	*lex = *lex + 1;
-	if(result.stat == CALC_FAILED) return PARSE_FAILED;
+	if(is_end(**lex)){ 
+		free_syntax_tree(left);
+		return NULL;
+	}
+	struct node_t* right = build_syntax_tree(lex);    
+	if(!right){
+		free_syntax_tree(left);
+		return NULL;	
+	}
 	
-	assign_a_var(table, name, result.result);
-	return PARSE_SUCCES;
-
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_ASSIGN;
+	ret->left = left;
+	ret->right = right;
+	*lex = *lex + 1;
+	return ret;
 }
 
-// statement :: = if | while | assignation | print | block | END
+// statement :: = if | while | assignation | print | block | END | semicolon
 
-enum parse_stat parse_statement(struct lexem_t **lex, struct var_table_t table){
+struct node_t* parse_statement(struct lexem_t **lex){
 	
 	switch((**lex).kind){
 		case VAR:{
-			return parse_assignation(lex, table);
+			return parse_assignation(lex);
 		}
 		case KEYWORD:{
 			switch((**lex).lex.word){
 				case WHILE:{
 					*lex = *lex + 1;
-					return parse_while(lex, table);
+					return parse_while(lex);
 				}
 				case IF:{
 					*lex = *lex + 1;
-					return parse_if(lex, table);
+					return parse_if(lex);
 				}
 				case PRINT:{
 					*lex = *lex + 1;
-					return parse_print(lex, table);
+					return parse_print(lex);
 				}
 				case OUT:{
 					*lex = *lex + 1;
-					return parse_out(lex, table);
+					return parse_out(lex);
 				}
 				default:{ 
 					printf("Unexpected keyword: ");
 					print_lexem(**lex);
 					printf("\n");
-					return PARSE_FAILED;
+					return NULL;
 				}
 			}
 		}
 		case BRACE:{
 			switch((**lex).lex.b){
 				case LCURV:{
-					return parse_block(lex, table);
+					return parse_block(lex);
 				}
 				default:{
 					printf("Unexpected brace: ");
 					print_lexem(**lex);
 					printf("\n");
-					return PARSE_FAILED;
+					return NULL;
 				}
 			}
 		}
-		case END: return PARSE_SUCCES;
+		case END:{
+			return create_empty_node();
+		}
 		default: {
 			printf("Unexpected lexem: ");
 			print_lexem(**lex);
 			printf("\n");
-			return PARSE_FAILED;
+			return NULL;
 		}
 	}	
+}
+
+struct node_t* create_empty_node(){
+	/*
+		****EMPTY NODE****
+		->left node contains statement that should be done first
+		->right node contains statement taht should be done after ->left
+	*/
+	struct node_t* empty = (struct node_t*)calloc(1, sizeof(struct node_t));
+	empty->data.k = NODE_NONE;
+	return empty;	
+}
+
+struct node_t* create_var_node(struct lexem_t lex){
+	if(lex.kind != VAR){
+		return NULL;
+	}
+	struct node_t* ret = create_empty_node();
+	ret->data.k = NODE_VAR;
+	ret->data.u.name = (char*)calloc(1, sizeof(char));
+	ret->data.u.name = strcpy(ret->data.u.name, lex.lex.name);
+	return ret;
 }
 
 int is_else(struct lexem_t lex){
@@ -361,56 +442,6 @@ int is_valid_expression(struct lexem_t* start,struct lexem_t* stopsign){    // c
 		}
 	}
 	return 1;
-}
-
-void skip_statement(struct lexem_t** lex){
-	switch((**lex).kind){
-		case KEYWORD:{
-			switch((**lex).lex.word){
-				case IF:{
-					*lex = *lex + 1;             //   skips construction: if condition { ... } | if condition statement; 
-					skip_to_next_rbrac(lex);
-					skip_statement(lex);
-					break;
-				}
-				case WHILE:{                          // skips construction: while condition {...} | while condition statement;
-					*lex = *lex + 1;
-					skip_to_next_rbrac(lex);
-					skip_statement(lex);
-					break;				
-				}
-				case PRINT:{                          // skips: print variable;
-					go_to_semicolon(lex);
-					*lex = *lex + 1;
-					break;				
-				}
-				case ELSE:{							//skips: else {...} | else statement;
-					*lex = *lex + 1;
-					skip_statement(lex);
-					break;
-				}
-			}
-			break;
-		}
-		case BRACE:{
-			switch((**lex).lex.b){
-				case LCURV:{                        //skips {...}
-					skip_to_next_rcurv(lex);
-					break;
-				}
-				case LBRAC:{                        //skips (...)
-					skip_to_next_rbrac(lex);    
-					break;
-				}
-				default: return;
-			}
-			break;
-		}
-		default:{
-			go_to_semicolon(lex);                  //skips  statement;
-			*lex = *lex + 1;
-		}			
-	}
 }
 
 void go_to_semicolon(struct lexem_t** lex){

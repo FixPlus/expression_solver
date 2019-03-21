@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "statement_parser.h"
+#include "tree_executer.h"
 
 enum { MAXLEN = 1024 };
 
@@ -12,11 +13,13 @@ int main(){
   res = scanf("%1023c", inp);
   assert(res == 1);
   
-  table = solve_expressions(inp);
+  struct node_t* root = parse_code(inp);
+  if(!root)
+	  return 0;
   
-  FILE* file = fopen("tests/std.ans","w");  
-  //print_vars(stdout,table);
-  fclose(file);
-  destroy_var_table(&table);
+  execute_tree(root);
+  
+  free_syntax_tree(root);
+  
   return 0;	
 }

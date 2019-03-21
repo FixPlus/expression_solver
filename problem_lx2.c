@@ -280,6 +280,7 @@ int is_std_op_char(char c){
 		case '+': break;
 		case '-': break;
 		case '=': break;
+		case '\t': break;
 		case ')': break;
 		case '(': break;
 		case '{': break;
@@ -348,6 +349,7 @@ print_keyword(enum keyword_t word) {
     case IF: printf("if"); break;
 	case PRINT: printf("print"); break;
 	case ELSE: printf("else"); break;
+	case ALL: printf("all"); break;
 }
 }
 

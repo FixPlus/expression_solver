@@ -10,10 +10,10 @@
 
 
 struct node_t *
-build_syntax_tree(struct lexem_t** lex, struct var_table_t table) {	
+build_syntax_tree(struct lexem_t** lex) {	
 	//printf("\nBuilding syntax tree...\nTotal lexems: %d\n",lexarr.capacity - 1);
 	struct lexem_t* enter_point = *lex;
-	struct node_t* ret = parse_logic(lex, table);
+	struct node_t* ret = parse_logic(lex);
 	*lex = enter_point;
 	
 	*lex = *lex + 1;
@@ -24,8 +24,8 @@ build_syntax_tree(struct lexem_t** lex, struct var_table_t table) {
 	return ret;
 }
 
-struct node_t* parse_logic(struct lexem_t** lex, struct var_table_t table){
-	struct node_t* left = parse_comparation(lex, table);
+struct node_t* parse_logic(struct lexem_t** lex){
+	struct node_t* left = parse_comparation(lex);
 	if(!left)
 		return NULL;
 	
@@ -34,7 +34,7 @@ struct node_t* parse_logic(struct lexem_t** lex, struct var_table_t table){
 
 		*lex = *lex - 1;
 		
-		struct node_t* right = parse_logic(lex, table);
+		struct node_t* right = parse_logic(lex);
 		
 		if(!right){
 			free_syntax_tree(left);
@@ -52,8 +52,8 @@ struct node_t* parse_logic(struct lexem_t** lex, struct var_table_t table){
 		return left;
 }
 
-struct node_t* parse_comparation(struct lexem_t** lex, struct var_table_t table){
-	struct node_t* left = parse_expr(lex, table);
+struct node_t* parse_comparation(struct lexem_t** lex){
+	struct node_t* left = parse_expr(lex);
 	if(!left)
 		return NULL;
 	
@@ -62,7 +62,7 @@ struct node_t* parse_comparation(struct lexem_t** lex, struct var_table_t table)
 
 		*lex = *lex - 1;
 		
-		struct node_t* right = parse_expr(lex, table);
+		struct node_t* right = parse_expr(lex);
 		
 		if(!right){
 			free_syntax_tree(left);
@@ -79,8 +79,8 @@ struct node_t* parse_comparation(struct lexem_t** lex, struct var_table_t table)
 	else
 		return left;
 }
-struct node_t* parse_expr(struct lexem_t** lex, struct var_table_t table){
-	struct node_t* left= parse_mult(lex, table);
+struct node_t* parse_expr(struct lexem_t** lex){
+	struct node_t* left= parse_mult(lex);
 	if(!left)
 		return NULL;
 	
@@ -90,7 +90,7 @@ struct node_t* parse_expr(struct lexem_t** lex, struct var_table_t table){
 		
 		*lex = *lex - 1;
 		
-		struct node_t* right = parse_expr(lex, table);
+		struct node_t* right = parse_expr(lex);
 		
 		if(!right){
 			free_syntax_tree(left);
@@ -153,8 +153,8 @@ struct node_t* create_operation_expression(enum operation_t opcode){
 	return expr;
 }
 
-struct node_t* parse_mult(struct lexem_t** lex, struct var_table_t table){
-	struct node_t* left= parse_term(lex, table);
+struct node_t* parse_mult(struct lexem_t** lex){
+	struct node_t* left= parse_term(lex);
 	if(!left)
 		return NULL;
 	
@@ -164,7 +164,7 @@ struct node_t* parse_mult(struct lexem_t** lex, struct var_table_t table){
 		enum operation_t opcode = (**lex).lex.op;
 		*lex = *lex - 1;
 		
-		struct node_t* right = parse_mult(lex, table);
+		struct node_t* right = parse_mult(lex);
 		
 		if(!right){
 			free_syntax_tree(left);
@@ -181,7 +181,7 @@ struct node_t* parse_mult(struct lexem_t** lex, struct var_table_t table){
 		return left;	
 }
 
-struct node_t* parse_term(struct lexem_t** lex, struct var_table_t table){
+struct node_t* parse_term(struct lexem_t** lex){
 	
 	if(check_end(*lex)){     //checking if we unexpectly reach the end of expression (e.g. mistakes in lexems). In case when something goes wrong we safely stop building
 		printf("Unexpected reach of the end of expression!\n");
@@ -196,7 +196,7 @@ struct node_t* parse_term(struct lexem_t** lex, struct var_table_t table){
 		case BRACE:{
 			*lex = *lex - 1;
 			free(ret);
-			ret = parse_logic(lex, table);
+			ret = parse_logic(lex);
 			if(!is_brace(**lex)){   //if expression didn't end with brace, stopping the tree building
 				free_syntax_tree(ret);
 				printf("Braces are not correct!\n");
@@ -213,14 +213,9 @@ struct node_t* parse_term(struct lexem_t** lex, struct var_table_t table){
 			return ret;
 		}
 		case VAR: {
-			struct var_t var = get_var(table, (**lex).lex.name);
-			if(is_undef(var)){
-				free_syntax_tree(ret);
-				throw_the_undef_var_exception((**lex).lex.name);
-				return NULL;				
-			}
-			ret->data.k = NODE_VAL;
-			ret->data.u.d = var.value;
+			ret->data.k = NODE_VAR;
+			ret->data.u.name = (char*)calloc(1, sizeof(char));
+			ret->data.u.name = strcpy(ret->data.u.name, (**lex).lex.name);
 			*lex = *lex - 1;
 			return ret;
 		
@@ -237,99 +232,105 @@ int check_end(struct lexem_t* lex){
 	return (lex->kind == OP || lex->kind == NUM || lex->kind == VAR || lex->kind == BRACE) ? 0 : 1;
 }
 
-int calc_result(struct node_t *top) {
-	printf("Calculating...\n");
-	
-	struct calc_data_t result = calculate(top);
-	if(result.stat == CALC_FAILED){
-		printf("Calculation failed!\n");
-		return 0;
-	}
-	else
-		return result.result;
-	
-}
 
-struct calc_data_t calculate(struct node_t *top){
+
+struct calc_data_t calculate(struct node_t *top, struct var_table_t table){
 	struct calc_data_t ret = {CALC_SUCCES, 0};
 	
-	if(top->data.k == NODE_VAL){
-		ret.result = top->data.u.d; 
-		return ret;
-	}
-	
-	struct calc_data_t res1 = calculate(top->left);
-	struct calc_data_t res2 = calculate(top->right);
-	
-	if(res1.stat == CALC_FAILED || res2.stat == CALC_FAILED){
-		ret.stat = CALC_FAILED;
-		return ret;
-	}
-	
-	switch(top->data.u.op){
-		case ADD:{
-			ret.result = res1.result + res2.result;
-			return  ret;
+	switch(top->data.k){
+		case NODE_VAL:{
+			ret.result = top->data.u.d; 
+			return ret;
 		}
-		case SUB:{
-			ret.result = res1.result - res2.result;
-			return  ret;
-		}
-		case MUL:{
-			ret.result = res1.result * res2.result;
-			return  ret;
-		}
-		case DIV:{
-			if(res2.result == 0){
+		case NODE_OP:{
+			struct calc_data_t res1 = calculate(top->left, table);
+			struct calc_data_t res2 = calculate(top->right, table);
+			
+			if(res1.stat == CALC_FAILED || res2.stat == CALC_FAILED){
 				ret.stat = CALC_FAILED;
 				return ret;
 			}
-			else{
-				ret.result = res1.result / res2.result;
+			
+			switch(top->data.u.op){
+				case ADD:{
+					ret.result = res1.result + res2.result;
+					return  ret;
+				}
+				case SUB:{
+					ret.result = res1.result - res2.result;
+					return  ret;
+				}
+				case MUL:{
+					ret.result = res1.result * res2.result;
+					return  ret;
+				}
+				case DIV:{
+					if(res2.result == 0){
+						printf("Division by zero!\n");
+						ret.stat = CALC_FAILED;
+						return ret;
+					}
+					else{
+						ret.result = res1.result / res2.result;
+						return ret;
+					}
+				}
+				case EQUAL:{
+					ret.result = (res1.result == res2.result) ? 1:0;
+					return ret;
+				}
+				case NOT_EQUAL:{
+					ret.result = (res1.result != res2.result) ? 1:0;
+					return ret;
+				}
+				case MORE:{
+					ret.result = (res1.result > res2.result) ? 1:0;
+					return ret;
+				}
+				case LESS:{
+					ret.result = (res1.result < res2.result) ? 1:0;
+					return ret;
+				}
+				case EQ_OR_MORE:{
+					ret.result = (res1.result >= res2.result) ? 1:0;
+					return ret;
+				}
+				case EQ_OR_LESS:{
+					ret.result = (res1.result <= res2.result) ? 1:0;
+					return ret;
+				}
+				case LG_AND:{
+					ret.result = (res1.result && res2.result) ? 1:0;
+					return ret;
+				}
+				case LG_OR:{
+					ret.result = (res1.result || res2.result) ? 1:0;
+					return ret;
+				}
+
+				default:{
+					ret.stat = CALC_FAILED;
+					return ret;
+				}
+				
+			}	
+		}
+		case NODE_VAR:{
+			struct var_t var = get_var(table, top->data.u.name);
+			if(is_undef(var)){
+				throw_the_undef_var_exception(top->data.u.name);
+				ret.stat = CALC_FAILED;
 				return ret;
 			}
-		}
-		case EQUAL:{
-			ret.result = (res1.result == res2.result) ? 1:0;
+			ret.result = var.value;
 			return ret;
 		}
-		case NOT_EQUAL:{
-			ret.result = (res1.result != res2.result) ? 1:0;
-			return ret;
-		}
-		case MORE:{
-			ret.result = (res1.result > res2.result) ? 1:0;
-			return ret;
-		}
-		case LESS:{
-			ret.result = (res1.result < res2.result) ? 1:0;
-			return ret;
-		}
-		case EQ_OR_MORE:{
-			ret.result = (res1.result >= res2.result) ? 1:0;
-			return ret;
-		}
-		case EQ_OR_LESS:{
-			ret.result = (res1.result <= res2.result) ? 1:0;
-			return ret;
-		}
-		case LG_AND:{
-			ret.result = (res1.result && res2.result) ? 1:0;
-			return ret;
-		}
-		case LG_OR:{
-			ret.result = (res1.result || res2.result) ? 1:0;
-			return ret;
-		}
-
 		default:{
-			ret.stat = CALC_FAILED;
-			return ret;
+				ret.stat = CALC_FAILED;
+				return ret;
 		}
-		
-	}	
+	}
 }
-
 
 
 void free_syntax_tree(struct node_t * top) {
@@ -338,5 +339,7 @@ void free_syntax_tree(struct node_t * top) {
 	
 	free_syntax_tree(top->left);
 	free_syntax_tree(top->right);
+	if(top->data.k == NODE_VAR)
+		free(top->data.u.name);
 	free(top);
 }

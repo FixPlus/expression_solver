@@ -1,0 +1,15 @@
+
+CC = gcc
+EXECUTABLE = expr_solver
+SOURCES = problem_es_main.c problem_lx2.c problem_st2.c statement_parser.c tree_executer.c var_table.c
+OBJECTS = $(SOURCES:.c=.o)
+
+$(EXECUTABLE):$(SOURCES) $(OBJECTS)
+	$(CC) $(OBJECTS) -o $@
+
+.c.o: 
+	$(CC) -c $< -o $@
+
+#use clean to delete .o files
+clean:
+	rm -rf *.o $(EXECUTABLE)
